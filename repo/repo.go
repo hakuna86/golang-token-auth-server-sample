@@ -26,18 +26,24 @@ func (r *Repo) CreateUser(user *model.User) error {
 }
 
 func (r *Repo) IsUser(username, password string) bool {
-	u := model.User{Email : username, Password: password}
+	u := model.User{Email: username, Password: password}
 	if r.DB.Find(&u).Error != nil {
 		return false
 	}
 	return true
 }
 
-func (r *Repo) GetUser(username string) *model.User {
-	u := model.User{Email : username}
-	if r.DB.Find(&u).Error != nil {
+func (r *Repo) GetUser(user *model.User) *model.User {
+	if r.DB.Find(user).Error != nil {
 		return nil
 	}
-	return &u
+	return user
 }
 
+func (r *Repo) UpdateUser(user *model.User) error {
+	return r.DB.Save(user).Error
+}
+
+func (r *Repo) UdateUserAuthInfo(auth *model.Auth) error {
+	return r.DB.Save(auth).Error
+}

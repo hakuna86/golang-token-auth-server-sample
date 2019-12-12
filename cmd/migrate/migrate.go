@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 )
 
-func main()  {
+func main() {
 	db, err := gorm.Open("sqlite3", filepath.Base("./sample.sqlite"))
 	if err != nil {
 		panic(err)
 	}
 	db.LogMode(true)
-	db.AutoMigrate(&model.User{}, &model.Article{})
+	db.AutoMigrate(&model.User{}, &model.Article{}, &model.Auth{})
 	log.Println("=============== Success Migrate ===============")
 }

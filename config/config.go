@@ -1,5 +1,5 @@
 package config
 
 var (
-	JwtSignString = []byte("secret")
+	JwtTokenString = []byte("secret")
 )
