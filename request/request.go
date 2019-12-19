@@ -3,8 +3,8 @@ package request
 import (
 	"errors"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/hakuna86/golang-token-auth-server-sample/repo"
-	"github.com/hakuna86/golang-token-auth-server-sample/repo/model"
+	"github.com/hakuna86/golang-token-auth-server-sample/ent"
+	"github.com/hakuna86/golang-token-auth-server-sample/request/model"
 	"github.com/labstack/echo"
 	"net/http"
 )
@@ -29,50 +29,59 @@ func FailResponse(err error) *Response {
 }
 
 // Member register
-func SignUp(r *repo.Repo) echo.HandlerFunc {
+func SignUp(client *ent.Client) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		u := new(model.User)
 		if err := c.Bind(u); err != nil {
 			return err
 		}
-		u.Role = "ADMIN"
-		if err := r.CreateUser(u); err != nil {
-			return c.JSON(http.StatusOK, FailResponse(err))
+		u.Role = model.Admin
+		if err := u.CreateUser(client, c); err != nil {
+			return c.JSON(http.StatusConflict, FailResponse(err))
 		}
-		return c.JSON(http.StatusOK, SuccesResponse("", nil))
+		return c.JSON(http.StatusCreated, SuccesResponse(u.String(), nil))
 	}
 }
 
-func SignIn(r *repo.Repo) echo.HandlerFunc {
+func SignIn(client *ent.Client) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		username, ok := c.Get("username").(string)
 		if !ok {
 			return c.JSON(http.StatusUnauthorized, FailResponse(IncorrectInfoError))
 		}
-		user := r.GetUser(&model.User{Email: username})
-		token, err := makeToken(user)
+
+		password, ok := c.Get("password").(string)
+		if !ok {
+			return c.JSON(http.StatusUnauthorized, FailResponse(IncorrectInfoError))
+		}
+
+		u := &model.User{Eamil: username, Password: password}
+		user, err := u.FindUser(client)
 		if err != nil {
 			return c.JSON(http.StatusUnauthorized, FailResponse(err))
 		}
 
-		user.Auth.Email = user.Email
-		user.Auth.RefreshToken = token.Refresh
-		user.Auth.AccessToken = token.Access
-
-		err = r.UpdateUser(user)
+		auth, err := makeToken(user)
 		if err != nil {
 			return c.JSON(http.StatusUnauthorized, FailResponse(err))
 		}
-		return c.JSON(http.StatusOK, SuccesResponse("Successful SignIn", map[string]string{
-			"access_token":  token.Access,
-			"refresh_token": token.Refresh,
-		}))
+
+		if err := auth.CreateOrUpdateAuthToken(user, client); err != nil {
+			return c.JSON(http.StatusUnauthorized, FailResponse(err))
+		}
+
+		return c.JSON(http.StatusOK, SuccesResponse("Successful SignIn", auth))
 	}
 }
 
-func SingOut() echo.HandlerFunc {
+func SingOut(client *ent.Client) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		return nil
+		token := c.Get("user").(*jwt.Token)
+		a := &model.Auth{Access: token.Raw}
+		if err := a.DeleteAuth(client); err != nil {
+			return c.JSON(http.StatusOK, FailResponse(err))
+		}
+		return c.JSON(http.StatusOK, SuccesResponse("SignOut Successed", nil))
 	}
 }
 
@@ -84,50 +93,35 @@ func Restricted() echo.HandlerFunc {
 	}
 }
 
-func RefreshToken(r *repo.Repo) echo.HandlerFunc {
-	type refreshReq struct {
-		RefreshToken string `json:"refreshToken"`
-		AuthToken    string `json:"authToken"`
-	}
-
+func RefreshToken(client *ent.Client) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		req := new(refreshReq)
-		if err := c.Bind(&req); err != nil {
+		au := new(model.Auth)
+		if err := c.Bind(au); err != nil {
 			return err
 		}
-
-		_, err := getToken(req.RefreshToken)
+		_, err := getToken(au.Refresh)
 		if err != nil {
 			return c.JSON(http.StatusUnauthorized, FailResponse(err))
 		}
-
-		authToken, _ := getToken(req.AuthToken)
+		authToken, _ := getToken(au.Access)
 		authClaims := authToken.Claims.(jwt.MapClaims)
-		username, ok := authClaims["username"].(string)
+		email, ok := authClaims["email"].(string)
 		if !ok {
 			return c.JSON(http.StatusUnauthorized, FailResponse(IncorrectAccessToken))
 		}
-
-		user := r.GetUser(&model.User{Email: username})
-		if user != nil && user.Auth.RefreshToken == req.RefreshToken {
-			token, err := makeToken(user)
+		user, err := au.FindUserByAccesstoken(client)
+		if err != nil {
+			return c.JSON(http.StatusUnauthorized, FailResponse(IncorrectAccessToken))
+		}
+		if user.Eamil == email {
+			auth, err := makeToken(user)
 			if err != nil {
 				return c.JSON(http.StatusUnauthorized, FailResponse(err))
 			}
-
-			user.Auth.Email = user.Email
-			user.Auth.RefreshToken = token.Refresh
-			user.Auth.AccessToken = token.Access
-
-			err = r.UpdateUser(user)
-			if err != nil {
+			if err := auth.CreateOrUpdateAuthToken(user, client); err != nil {
 				return c.JSON(http.StatusUnauthorized, FailResponse(err))
 			}
-
-			return c.JSON(http.StatusOK, SuccesResponse("Successful Refresh Token", map[string]string{
-				"access_token":  token.Access,
-				"refresh_token": token.Refresh,
-			}))
+			return c.JSON(http.StatusOK, SuccesResponse("Successful token refresh", auth))
 		} else {
 			return c.JSON(http.StatusUnauthorized, FailResponse(IncorrectAccessToken))
 		}

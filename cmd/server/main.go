@@ -1,13 +1,13 @@
 package main
 
 import (
-	"errors"
-	"fmt"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/relay"
 	"github.com/hakuna86/golang-token-auth-server-sample/config"
-	"github.com/hakuna86/golang-token-auth-server-sample/repo"
-	"github.com/hakuna86/golang-token-auth-server-sample/repo/model"
 	"github.com/hakuna86/golang-token-auth-server-sample/request"
+	"github.com/hakuna86/golang-token-auth-server-sample/request/gq"
+	"github.com/hakuna86/golang-token-auth-server-sample/request/model"
+	mw "github.com/hakuna86/golang-token-auth-server-sample/request/nw"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 )
@@ -19,11 +19,21 @@ func main() {
 	e.Use(middleware.Recover())
 
 	// database
-	rp, err := repo.NewRepo()
+	dbClient, err := config.ConnectDatabase()
 	if err != nil {
 		e.Logger.Fatal(err)
 	}
-	defer rp.DB.Close()
+
+	e.Static("/", "static")
+
+	query := e.Group("/query")
+	{
+		query.Use(middleware.JWT(config.JwtTokenString))
+		query.Use(mw.AuthMiddleWare(dbClient))
+		opts := []graphql.SchemaOpt{graphql.UseFieldResolvers(), graphql.MaxParallelism(20)}
+		h := &relay.Handler{Schema: graphql.MustParseSchema(gq.Schema, &gq.Resolver{}, opts...)}
+		query.POST("", echo.WrapHandler(h))
+	}
 
 	// router
 	api := e.Group("/api")
@@ -31,7 +41,7 @@ func main() {
 		// public api
 		pub := api.Group("/public")
 		{
-			pub.POST("/signUp", request.SignUp(rp))
+			pub.POST("/signUp", request.SignUp(dbClient))
 
 		}
 
@@ -43,33 +53,24 @@ func main() {
 				signIn.Use(middleware.BasicAuth(func(username, password string, c echo.Context) (bool, error) {
 					c.Set("username", username)
 					c.Set("password", password)
-					return rp.IsUser(username, password), nil
+					u := &model.User{Eamil: username, Password: password}
+					if _, err := u.FindUser(dbClient); err != nil {
+						return false, err
+					}
+					return true, nil
 				}))
-				signIn.POST("/getToken", request.SignIn(rp))
+				signIn.POST("/getToken", request.SignIn(dbClient))
 			}
-			auth.POST("/refreshToken", request.RefreshToken(rp))
+			auth.POST("/refreshToken", request.RefreshToken(dbClient))
 		}
 
 		// private api
 		restricted := api.Group("/restricted")
 		{
 			restricted.Use(middleware.JWT(config.JwtTokenString))
-			restricted.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-				return func(c echo.Context) error {
-					user := c.Get("user").(*jwt.Token)
-					claims := user.Claims.(jwt.MapClaims)
-					username := claims["username"].(string)
-					u := rp.GetUser(&model.User{Email: username})
-
-					fmt.Print("=============================", username, u.Auth)
-
-					if u.Auth.AccessToken == user.Raw {
-						return next(c)
-					}
-					return errors.New("Access Token is not matched")
-				}
-			})
+			restricted.Use(mw.AuthMiddleWare(dbClient))
 			restricted.GET("", request.Restricted())
+			restricted.GET("/signOut", request.SingOut(dbClient))
 		}
 	}
 

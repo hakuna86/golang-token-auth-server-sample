@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/hakuna86/golang-token-auth-server-sample/config"
-	"github.com/hakuna86/golang-token-auth-server-sample/repo/model"
+	"github.com/hakuna86/golang-token-auth-server-sample/request/model"
 	"time"
 )
 
@@ -12,11 +12,6 @@ var (
 	authTokenExpir    = time.Now().Add(time.Minute * 10).Unix()
 	refreshTokenExpir = time.Now().Add(time.Hour * 24).Unix()
 )
-
-type Tokens struct {
-	Access  string
-	Refresh string
-}
 
 func getToken(token string) (*jwt.Token, error) {
 	return jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
@@ -27,14 +22,14 @@ func getToken(token string) (*jwt.Token, error) {
 	})
 }
 
-func makeToken(user *model.User) (*Tokens, error) {
+func makeToken(user *model.User) (*model.Auth, error) {
 	// Create Auth token
 	token := jwt.New(jwt.SigningMethodHS256)
 	//// Set claims
 	claims := token.Claims.(jwt.MapClaims)
-	claims["username"] = user.Email
+	claims["username"] = user.Username
+	claims["email"] = user.Eamil
 	claims["role"] = user.Role
-	claims["name"] = user.Name
 	claims["exp"] = authTokenExpir
 
 	// Generate encoded token and send it as response.
@@ -55,6 +50,5 @@ func makeToken(user *model.User) (*Tokens, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	return &Tokens{t, rt}, err
+	return &model.Auth{t, rt}, nil
 }
