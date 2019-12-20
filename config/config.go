@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/hakuna86/golang-token-auth-server-sample/ent"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"
 )
 
 //_ "github.com/mattn/go-sqlite3" --> using sqlite
@@ -16,8 +16,8 @@ var (
 )
 
 func ConnectDatabase() (*ent.Client, error) {
-	//client, err := ent.Open("postgres", connectionString)
-	client, err := ent.Open("sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
+	client, err := ent.Open("postgres", connectionString)
+	//client, err := ent.Open("sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
 	if err != nil {
 		return nil, err
 	}

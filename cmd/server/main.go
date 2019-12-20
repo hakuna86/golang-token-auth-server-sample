@@ -4,10 +4,9 @@ import (
 	"github.com/graph-gophers/graphql-go"
 	"github.com/graph-gophers/graphql-go/relay"
 	"github.com/hakuna86/golang-token-auth-server-sample/config"
-	"github.com/hakuna86/golang-token-auth-server-sample/request"
-	"github.com/hakuna86/golang-token-auth-server-sample/request/gq"
-	"github.com/hakuna86/golang-token-auth-server-sample/request/model"
-	mw "github.com/hakuna86/golang-token-auth-server-sample/request/nw"
+	"github.com/hakuna86/golang-token-auth-server-sample/model"
+	"github.com/hakuna86/golang-token-auth-server-sample/model/schma"
+	"github.com/hakuna86/golang-token-auth-server-sample/route"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 )
@@ -26,12 +25,20 @@ func main() {
 
 	e.Static("/", "static")
 
+	// public query
+	pQuery := e.Group("/publicQuery")
+	{
+		opts := []graphql.SchemaOpt{graphql.UseFieldResolvers(), graphql.MaxParallelism(20)}
+		h := &relay.Handler{Schema: graphql.MustParseSchema(schma.Schema, schma.NewResolver(dbClient), opts...)}
+		pQuery.POST("", echo.WrapHandler(h))
+	}
+
 	query := e.Group("/query")
 	{
 		query.Use(middleware.JWT(config.JwtTokenString))
-		query.Use(mw.AuthMiddleWare(dbClient))
+		query.Use(route.AuthMiddleWare(dbClient))
 		opts := []graphql.SchemaOpt{graphql.UseFieldResolvers(), graphql.MaxParallelism(20)}
-		h := &relay.Handler{Schema: graphql.MustParseSchema(gq.Schema, &gq.Resolver{}, opts...)}
+		h := &relay.Handler{Schema: graphql.MustParseSchema(schma.Schema, schma.NewResolver(dbClient), opts...)}
 		query.POST("", echo.WrapHandler(h))
 	}
 
@@ -41,7 +48,7 @@ func main() {
 		// public api
 		pub := api.Group("/public")
 		{
-			pub.POST("/signUp", request.SignUp(dbClient))
+			pub.POST("/signUp", route.SignUp(dbClient))
 
 		}
 
@@ -59,18 +66,18 @@ func main() {
 					}
 					return true, nil
 				}))
-				signIn.POST("/getToken", request.SignIn(dbClient))
+				signIn.POST("/getToken", route.SignIn(dbClient))
 			}
-			auth.POST("/refreshToken", request.RefreshToken(dbClient))
+			auth.POST("/refreshToken", route.RefreshToken(dbClient))
 		}
 
 		// private api
 		restricted := api.Group("/restricted")
 		{
 			restricted.Use(middleware.JWT(config.JwtTokenString))
-			restricted.Use(mw.AuthMiddleWare(dbClient))
-			restricted.GET("", request.Restricted())
-			restricted.GET("/signOut", request.SingOut(dbClient))
+			restricted.Use(route.AuthMiddleWare(dbClient))
+			restricted.GET("", route.Restricted())
+			restricted.GET("/signOut", route.SingOut(dbClient))
 		}
 	}
 

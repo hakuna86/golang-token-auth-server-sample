@@ -1,10 +1,10 @@
-package request
+package route
 
 import (
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/hakuna86/golang-token-auth-server-sample/config"
-	"github.com/hakuna86/golang-token-auth-server-sample/request/model"
+	"github.com/hakuna86/golang-token-auth-server-sample/model"
 	"time"
 )
 

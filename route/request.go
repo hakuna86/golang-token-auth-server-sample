@@ -1,10 +1,10 @@
-package request
+package route
 
 import (
 	"errors"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/hakuna86/golang-token-auth-server-sample/ent"
-	"github.com/hakuna86/golang-token-auth-server-sample/request/model"
+	"github.com/hakuna86/golang-token-auth-server-sample/model"
 	"github.com/labstack/echo"
 	"net/http"
 )

@@ -1,12 +1,11 @@
 // middleware
 
-package mw
+package route
 
 import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/hakuna86/golang-token-auth-server-sample/ent"
-	"github.com/hakuna86/golang-token-auth-server-sample/request"
-	"github.com/hakuna86/golang-token-auth-server-sample/request/model"
+	"github.com/hakuna86/golang-token-auth-server-sample/model"
 	"github.com/labstack/echo"
 	"net/http"
 )
@@ -23,9 +22,10 @@ func AuthMiddleWare(client *ent.Client) echo.MiddlewareFunc {
 			claims := access.Claims.(jwt.MapClaims)
 			email := claims["email"].(string)
 			if email == user.Eamil {
+				c.Set("email", email)
 				return next(c)
 			}
-			return c.JSON(http.StatusUnauthorized, request.IncorrectAccessToken)
+			return c.JSON(http.StatusUnauthorized, IncorrectAccessToken)
 		}
 	}
 }
