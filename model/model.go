@@ -59,6 +59,24 @@ func (u *User) FindUser(client *ent.Client) (*User, error) {
 	}, nil
 }
 
+func (u *User) FindByEmail2(client *ent.Client) (*User, error) {
+	fu, err := client.User.
+		Query().
+		Where(
+			user.Email(u.Eamil),
+		).Only(context.Background())
+
+	if err != nil {
+		return nil, err
+	}
+	return &User{
+		Eamil:    fu.Email,
+		Username: fu.Username,
+		Password: fu.Password,
+		Role:     fu.Role,
+	}, nil
+}
+
 func (u *User) FindByEmail(client *ent.Client) (*ent.User, error) {
 	return client.User.
 		Query().

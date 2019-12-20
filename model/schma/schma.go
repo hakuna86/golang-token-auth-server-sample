@@ -2,8 +2,14 @@ package schma
 
 import (
 	"context"
+	"errors"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/hakuna86/golang-token-auth-server-sample/ent"
 	"github.com/hakuna86/golang-token-auth-server-sample/model"
+)
+
+var (
+	tokenIsNil = errors.New("Token is Nil")
 )
 
 const Schema = `
@@ -12,7 +18,7 @@ const Schema = `
 	}
 	
 	type Query {
-		user(email: String! Password: String!): User!
+		user(): User!
 	}
 	
 	type User {
@@ -38,9 +44,15 @@ func NewResolver(client *ent.Client) *Resolver {
 	}
 }
 
-func (r *Resolver) User(ctx context.Context, args struct{ Email, Password string }) (User, error) {
-	u := &model.User{Eamil: args.Email, Password: args.Password}
-	gU, err := u.FindUser(r.db)
+func (r *Resolver) User(ctx context.Context) (User, error) {
+	token, ok := ctx.Value("token").(*jwt.Token)
+	if !ok {
+		return User{}, tokenIsNil
+	}
+	claims := token.Claims.(jwt.MapClaims)
+	email := claims["email"].(string)
+	u := &model.User{Eamil: email}
+	gU, err := u.FindByEmail2(r.db)
 	if err != nil {
 		return User{}, err
 	}
